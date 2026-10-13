@@ -1,0 +1,89 @@
+:root {
+  --primary: #4e73df;
+  --background: #f8f9fc;
+  --text: #212529;
+  --button-bg: #e2e6ea;
+  --button-hover: #d6d8db;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: system-ui, sans-serif;
+  background: var(--background);
+  color: var(--text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+h1 {
+  margin-bottom: 1.5rem;
+}
+
+.choices {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.choice-button {
+  background: var(--button-bg);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.choice-button:hover,
+.choice-button:focus {
+  background: var(--button-hover);
+  outline: none;
+}
+
+.result {
+  text-align: center;
+}
+
+.result h2 {
+  margin-top: 1rem;
+  color: var(--primary);
+}
+
+.reset-button {
+  margin-top: 1rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reset-button:hover,
+.reset-button:focus {
+  background: #2e4fbd;
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  .choice-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+}
