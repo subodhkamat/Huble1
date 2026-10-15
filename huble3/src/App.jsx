@@ -1,8 +1,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { SpeedInsights } from "@vercel/speed-insights/next"
-import { SpeedInsights } from "@vercel/speed-insights/react";
+
+
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 const examples = [
@@ -12,6 +12,7 @@ const examples = [
 ];
 
 export default function App() {
+      <SpeedInsights />
 const [prompt, setPrompt] = useState("");
 const [files, setFiles] = useState({});
 const [selectedFile, setSelectedFile] = useState("");
