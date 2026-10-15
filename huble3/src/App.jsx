@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { SpeedInsights } from "@vercel/speed-insights/next"
-
-const API_URL = (import.meta.env.VITE_API_URL || "http://0.0.0.0:7651").replace(/\/$/, "");
+import { SpeedInsights } from "@vercel/speed-insights/react";
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 const examples = [
   "Build a student management dashboard",
