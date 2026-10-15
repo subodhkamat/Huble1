@@ -315,7 +315,6 @@ REQUIRED_FILES = {
     "src/main.jsx",
     "src/App.jsx",
     "src/App.css",
-
 }
 ALLOWED_FILES = REQUIRED_FILES
 
