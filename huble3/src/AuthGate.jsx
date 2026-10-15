@@ -3,7 +3,7 @@ import App from "./App.jsx";
 import Login from "./Login.jsx";
 import "./Auth.css";
 
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || "http://0.0.0.0:7651").replace(/\/$/, "");
 
 function readCookie(name) {
   const prefix = `${name}=`;
