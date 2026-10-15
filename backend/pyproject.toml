@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.143.0",
     "httpx>=0.28.1",
     "itsdangerous>=2.2.0",
+    "langgraph>=1.2.15",
     "openai>=3.26.1",
     "playwright>=1.63.0",
     "pwdlib>=0.3.1",

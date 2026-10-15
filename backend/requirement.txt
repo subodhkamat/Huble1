@@ -1,3 +1,4 @@
+
 fastapi
 uvicorn[standard]
 openai
@@ -8,3 +9,10 @@ itsdangerous
 httpx
 sqlalchemy
 aiosqlite
+alembic
+asyncpg
+langgraph
+typing-extensions
+playwright
+pwdlib
+PyJWT

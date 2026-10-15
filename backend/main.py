@@ -23,7 +23,7 @@ from test_service import run_autonomous_tests
 from schemas import TestProjectRequest
 from schemas import ProjectPlanRequest
 from starlette.middleware.sessions import SessionMiddleware
-
+from model_config import generate_project1
 from database import BASE_DIR
 from oauth_service import router as oauth_router
 from project_planner import analyze_project, plan_project_change
@@ -97,7 +97,7 @@ async def home():
 async def generate(request: GenerateRequest):
     try:
         print("1")
-        files = await generate_project(request.prompt)
+        files = await generate_project1(request.prompt)
         print("1cc")
         save_project(files)
         print("2")

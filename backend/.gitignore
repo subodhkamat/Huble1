@@ -10,3 +10,23 @@ wheels/
 .venv
 .env
 uv.lock
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+
+# Node dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+
+# Vite cache and logs
+.vite/
+**/.vite/
+*.log
+
+# Generated project dependencies
+workspace/generated_project/node_modules/

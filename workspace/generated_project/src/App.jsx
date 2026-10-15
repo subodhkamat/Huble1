@@ -1,68 +1,82 @@
 import React, { useState } from 'react';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  addMonths,
+  subMonths,
+  isSameMonth,
+  getDay,
+  isSameDay,
+} from 'date-fns';
 
-const choices = ['Rock', 'Paper', 'Scissors'];
+const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function getComputerChoice() {
-  const index = Math.floor(Math.random() * choices.length);
-  return choices[index];
-}
+const Calendar = () => {
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(today);
 
-function determineWinner(player, computer) {
-  if (player === computer) return 'Tie';
-  if (
-    (player === 'Rock' && computer === 'Scissors') ||
-    (player === 'Paper' && computer === 'Rock') ||
-    (player === 'Scissors' && computer === 'Paper')
-  ) {
-    return 'You win!';
-  }
-  return 'You lose!';
-}
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(monthStart);
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-function ChoiceButton({ choice, onClick }) {
-  return (
-    <button className="choice-button" onClick={() => onClick(choice)} aria-label={choice}>
-      {choice}
-    </button>
-  );
-}
+  const handlePrev = () => setCurrentDate(subMonths(currentDate, 1));
+  const handleNext = () => setCurrentDate(addMonths(currentDate, 1));
+  const handleToday = () => setCurrentDate(today);
 
-export default function App() {
-  const [playerChoice, setPlayerChoice] = useState(null);
-  const [computerChoice, setComputerChoice] = useState(null);
-  const [result, setResult] = useState('');
-
-  const handleChoice = (choice) => {
-    const comp = getComputerChoice();
-    setPlayerChoice(choice);
-    setComputerChoice(comp);
-    setResult(determineWinner(choice, comp));
-  };
-
-  const handleReset = () => {
-    setPlayerChoice(null);
-    setComputerChoice(null);
-    setResult('');
-  };
+  const isToday = (day) => isSameDay(day, today);
 
   return (
-    <main className="app">
-      <h1>Stone Paper Scissors</h1>
-      <div className="choices">
-        {choices.map((c) => (
-          <ChoiceButton key={c} choice={c} onClick={handleChoice} />
+    <div className="calendar">
+      <header className="calendar-header">
+        <button
+          onClick={handlePrev}
+          aria-label="Previous month"
+          className="nav-button"
+        >
+          ‹
+        </button>
+        <h2>{format(monthStart, 'MMMM yyyy')}</h2>
+        <button
+          onClick={handleNext}
+          aria-label="Next month"
+          className="nav-button"
+        >
+          ›
+        </button>
+        <button
+          onClick={handleToday}
+          aria-label="Today"
+          className="nav-button nav-button--today"
+        >
+          Today
+        </button>
+      </header>
+      <section className="calendar-grid">
+        {weekdays.map((day) => (
+          <div key={day} className="calendar-weekday">
+            {day}
+          </div>
         ))}
-      </div>
-      {result && (
-        <section className="result">
-          <p>You chose <strong>{playerChoice}</strong></p>
-          <p>Computer chose <strong>{computerChoice}</strong></p>
-          <h2>{result}</h2>
-          <button className="reset-button" onClick={handleReset}>
-            Play Again
-          </button>
-        </section>
-      )}
-    </main>
+        {days.map((day) => (
+          <div
+            key={day}
+            className={`calendar-day ${isSameMonth(day, monthStart) ? '' : 'calendar-day--disabled'} ${isToday(day) ? 'calendar-day--today' : ''}`}
+          >
+            {format(day, 'd')}
+          </div>
+        ))}
+      </section>
+    </div>
   );
-}
+};
+
+const App = () => (
+  <div className="app">
+    <h1>My Calendar</h1>
+    <Calendar />
+  </div>
+);
+
+export default App;

@@ -1,13 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stone Paper Scissors</title>
-  <link rel="stylesheet" href="/src/App.css" />
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React Calendar</title>
+  
+<!-- BUILDAI_RUNTIME_BRIDGE_START -->
+<script>
+(() => {
+  if (window.__buildAIRuntimeBridgeInstalled) return;
+  window.__buildAIRuntimeBridgeInstalled = true;
+
+  function report(type, message, details = {}) {
+    try {
+      window.parent.postMessage(
+        {
+          source: "BUILDAI_RUNTIME_ERROR",
+          type,
+          message: String(message || "Unknown runtime error").slice(0, 4000),
+          stack: String(details.stack || "").slice(0, 8000),
+          filename: String(details.filename || "").slice(0, 2000),
+          line: Number(details.line || 0),
+          column: Number(details.column || 0),
+          timestamp: Date.now()
+        },
+        "*"
+      );
+    } catch (_) {
+      // Monitoring must never crash the generated application.
+    }
+  }
+
+  window.addEventListener("error", (event) => {
+    report("error", event.message || "Browser runtime error", {
+      stack: event.error && event.error.stack,
+      filename: event.filename,
+      line: event.lineno,
+      column: event.colno
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    report(
+      "unhandledrejection",
+      reason && reason.message ? reason.message : String(reason),
+      { stack: reason && reason.stack }
+    );
+  });
+
+  // React Error Boundaries can call this to report rendering failures.
+  window.__buildAIReportError = (error, componentStack = "") => {
+    report("react-error", error && error.message, {
+      stack: [
+        error && error.stack,
+        componentStack
+      ].filter(Boolean).join("\n")
+    });
+  };
+})();
+</script>
+<!-- BUILDAI_RUNTIME_BRIDGE_END -->
+
 </head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
-</body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
