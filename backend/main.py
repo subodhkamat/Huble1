@@ -49,9 +49,6 @@ cookie_secure = (
     os.getenv("COOKIE_SECURE", "false").lower() == "true"
 )
 
-
-
-
 import asyncio
 
 app = FastAPI(
