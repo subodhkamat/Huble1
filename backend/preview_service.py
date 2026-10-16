@@ -115,6 +115,21 @@ def start_preview() -> str:
         str(PREVIEW_PORT),
         "--strictPort",
     ]
+          
+    install_result = subprocess.run(
+     ["npm", "install", "--include=dev"],
+      cwd=str(project_dir),
+      capture_output=True,
+      text=True,
+     timeout=300,
+    )
+
+    if install_result.returncode != 0:
+     raise RuntimeError(
+        "Generated project dependency installation failed.\n"
+        f"STDOUT:\n{install_result.stdout[-4000:]}\n"
+        f"STDERR:\n{install_result.stderr[-4000:]}"
+    )
 
     print("7: Starting Vite...")
     print("7a: Command:", repr(command))
