@@ -1,4 +1,4 @@
-
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
@@ -601,6 +601,7 @@ async function startLivePreview() {
   }
 
   return (
+    <>
     <main className="app">
       <header className="topbar">
         <a className="brand" href="/">
@@ -962,6 +963,9 @@ async function startLivePreview() {
       <footer>
         Built with React, FastAPI and AI
       </footer>
+      <SpeedInsights />
     </main>
+    </>
+
   );
 }
