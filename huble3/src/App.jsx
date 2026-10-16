@@ -12,7 +12,7 @@ const examples = [
 ];
 
 export default function App() {
-      <SpeedInsights />
+     
 const [prompt, setPrompt] = useState("");
 const [files, setFiles] = useState({});
 const [selectedFile, setSelectedFile] = useState("");
