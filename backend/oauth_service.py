@@ -29,7 +29,7 @@ SESSION_TTL_HOURS = int(
     os.getenv("SESSION_TTL_HOURS", "168")
 )
 print("=== BuildAI OAuth Environment Check ===")
-print("GOOGLE_CLIENT_ID exists:", bool(GOOGLE_CLIENT_ID))
+print(f"GOOGLE_CLIENT_ID exists:{GOOGLE_CLIENT_ID}")
 print("GOOGLE_CLIENT_SECRET exists:", bool(GOOGLE_CLIENT_SECRET))
 print("GOOGLE_CLIENT_ID prefix:", GOOGLE_CLIENT_ID[:12] if GOOGLE_CLIENT_ID else "MISSING")
 print("GOOGLE_CLIENT_SECRET length:", len(GOOGLE_CLIENT_SECRET or ""))
