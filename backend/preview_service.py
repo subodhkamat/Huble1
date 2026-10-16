@@ -62,39 +62,53 @@ def start_preview() -> str:
     npm = "npm.cmd" if os.name == "nt" else "npm"
     print("4: npm executable:", repr(npm))
 
+    
     print("5: Installing dependencies...")
 
     try:
         install = subprocess.run(
-            [npm, "install", "--no-audit", "--no-fund"],
+            [
+                npm,
+                "install",
+                "--include=dev",
+                "--no-audit",
+                "--no-fund",
+            ],
             cwd=str(project_dir),
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=300,
             shell=False,
         )
     except subprocess.TimeoutExpired as exc:
-        print("5a: npm install timed out")
         raise RuntimeError(
-            "Dependency installation exceeded 180 seconds."
+            "Dependency installation exceeded 300 seconds."
         ) from exc
     except OSError as exc:
-        print("5b: Could not execute npm:", repr(exc))
         raise RuntimeError(
             f"Could not run npm install: {exc}"
         ) from exc
 
     print("5c: npm install return code:", install.returncode)
-    print("5d: npm stdout:", (install.stdout or "")[-2000:])
-    print("5e: npm stderr:", (install.stderr or "")[-2000:])
+    print("5d: npm stdout:", (install.stdout or "")[-3000:])
+    print("5e: npm stderr:", (install.stderr or "")[-3000:])
 
     if install.returncode != 0:
-        details = (install.stderr or install.stdout or "")[-5000:]
         raise RuntimeError(
-            f"Dependency installation failed:\n{details}"
+            "Dependency installation failed:\n"
+            f"{(install.stderr or install.stdout or '')[-5000:]}"
         )
 
-    print("6: Dependencies installed successfully")
+    vite_path = project_dir / "node_modules" / ".bin" / "vite"
+
+    if not vite_path.exists():
+        raise RuntimeError(
+            "Vite is still missing after npm install. "
+            "Check package.json and the npm installation logs."
+        )
+
+    print("6: Dependencies installed and Vite verified.")
+
 
     log_path = project_dir / "vite-preview.log"
     print("6a: Vite log file:", log_path)
@@ -116,21 +130,6 @@ def start_preview() -> str:
         "--strictPort",
     ]
           
-    install_result = subprocess.run(
-     ["npm", "install", "--include=dev"],
-      cwd=str(project_dir),
-      capture_output=True,
-      text=True,
-     timeout=300,
-    )
-
-    if install_result.returncode != 0:
-     raise RuntimeError(
-        "Generated project dependency installation failed.\n"
-        f"STDOUT:\n{install_result.stdout[-4000:]}\n"
-        f"STDERR:\n{install_result.stderr[-4000:]}"
-    )
-
     print("7: Starting Vite...")
     print("7a: Command:", repr(command))
     print("7b: Working directory:", repr(str(project_dir)))
