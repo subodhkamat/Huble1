@@ -63,13 +63,13 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     raw_token = request.cookies.get("buildai_session")
-
+    print("1b")
     if not raw_token:
         raise HTTPException(
             status_code=401,
             detail="Authentication required",
         )
-
+    print("2b")
     result = await db.execute(
         select(AuthSession).where(
             AuthSession.token_hash == hash_token(raw_token),
