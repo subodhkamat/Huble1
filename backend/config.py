@@ -17,8 +17,8 @@ def clean_url(value: str | None, default: str) -> str:
     return (value or default).rstrip("/")
 
 
-FRONTEND_URL = clean_url(os.getenv("FRONTEND_URL"), "huble1.vercel.app")
-BACKEND_URL = clean_url(os.getenv("BACKEND_URL"), "http://0.0.0.0:7651")
+FRONTEND_URL = clean_url(os.getenv("FRONTEND_URL"), "https://huble1.vercel.app/")
+BACKEND_URL = clean_url(os.getenv("BACKEND_URL"), "https://huble1-1.onrender.com")
 
 # Must be listed under "Authorized redirect URIs" in Google Cloud Console.
 GOOGLE_REDIRECT_URI = (
