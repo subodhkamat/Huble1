@@ -238,21 +238,23 @@ async def google_callback(
         status_code=303,
     )
 
+   
     response.set_cookie(
         key="buildai_session",
         value=session_tokens["raw_token"],
         httponly=True,
-        secure=COOKIE_SECURE,
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=SESSION_TTL_HOURS * 60 * 60,
         path="/",
     )
+
     response.set_cookie(
         key="buildai_csrf",
         value=session_tokens["csrf_token"],
         httponly=False,
-        secure=COOKIE_SECURE,
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=SESSION_TTL_HOURS * 60 * 60,
         path="/",
     )
