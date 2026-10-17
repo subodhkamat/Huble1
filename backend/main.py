@@ -155,21 +155,16 @@ async def generate(request: GenerateRequest):
         ) from exc
 
 
-@app.api_route(
-    "/preview",
-    methods=["GET", "HEAD"],
-)
-async def preview_home(request: Request):
-    return await preview_proxy("", request)
-
 @app.post("/preview")
 async def preview():
     try:
-        url = start_preview()
+        start_preview()
 
+        # Browser must use the public FastAPI proxy, not
+        # the internal 127.0.0.1:5173 address.
         return {
             "success": True,
-            "preview_url": url,
+            "preview_url": "/preview/",
         }
 
     except ValueError as exc:
@@ -180,27 +175,22 @@ async def preview():
 
     except Exception as exc:
         print(f"Preview failed: {exc}")
-
         raise HTTPException(
             status_code=500,
-            detail="Could not start the project preview.",
+            detail=f"Could not start the project preview: {exc}",
         ) from exc
 
 
-@app.api_route(
-    "/preview/{path:path}",
-    methods=["GET", "HEAD"],
-)
-async def preview_proxy(path: str, request: Request):
-    import httpx
-
+@app.api_route("/preview", methods=["GET", "HEAD"])
+@app.api_route("/preview/{path:path}", methods=["GET", "HEAD"])
+async def preview_proxy(request: Request, path: str = ""):
     from preview_service import PREVIEW_URL
 
-    target_url = f"{PREVIEW_URL}/{path}"
+    target_url = f"{PREVIEW_URL.rstrip('/')}/{path.lstrip('/')}"
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=False,
+            follow_redirects=True,
             timeout=30.0,
         ) as client:
             upstream = await client.request(
@@ -210,7 +200,12 @@ async def preview_proxy(path: str, request: Request):
                 headers={
                     key: value
                     for key, value in request.headers.items()
-                    if key.lower() in {"accept", "range", "if-none-match"}
+                    if key.lower() in {
+                        "accept",
+                        "range",
+                        "if-none-match",
+                        "if-modified-since",
+                    }
                 },
             )
 
@@ -231,7 +226,6 @@ async def preview_proxy(path: str, request: Request):
             content=upstream.content,
             status_code=upstream.status_code,
             headers=headers,
-            media_type=upstream.headers.get("content-type"),
         )
 
     except httpx.HTTPError as exc:
@@ -240,6 +234,7 @@ async def preview_proxy(path: str, request: Request):
             status_code=502,
             detail="Could not connect to the running preview.",
         ) from exc
+
 
 
 @app.get("/download")

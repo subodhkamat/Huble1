@@ -23,21 +23,28 @@ _current_project = None
 def start_preview() -> str:
     global _process, _log_file, _current_project
 
-    print("1: Installing runtime bridge...")
+    print("Installing runtime bridge...")
     install_runtime_bridge()
-    print("1a: Runtime bridge installed successfully")
 
     project_dir = Path(BASE_DIR).resolve()
     package_file = project_dir / "package.json"
-    entry_file = project_dir / "index.html"
+    index_file = project_dir / "index.html"
+    main_file = project_dir / "src" / "main.jsx"
 
-    print("2: Project directory:", project_dir)
-    print("2a: package.json exists:", package_file.is_file())
-    print("2b: index.html exists:", entry_file.is_file())
+    print("Preview project:", project_dir)
+    print("package.json:", package_file.is_file())
+    print("index.html:", index_file.is_file())
+    print("src/main.jsx:", main_file.is_file())
 
-    if not package_file.is_file() or not entry_file.is_file():
+    if not package_file.is_file() or not index_file.is_file():
         raise ValueError(
-            "Generated project is missing package.json or index.html."
+            f"Generated project is missing package.json or index.html: "
+            f"{project_dir}"
+        )
+
+    if not main_file.is_file():
+        raise ValueError(
+            f"Generated project is missing src/main.jsx: {main_file}"
         )
 
     node = shutil.which("node")
@@ -46,19 +53,19 @@ def start_preview() -> str:
     if os.name == "nt" and not npm:
         npm = shutil.which("npm.cmd")
 
-    if not node or not npm:
-        raise RuntimeError(
-            f"Node.js/npm not found in PATH. node={node}, npm={npm}"
-        )
+    if not node:
+        raise RuntimeError("Node.js was not found in PATH.")
 
     vite_js = project_dir / "node_modules" / "vite" / "bin" / "vite.js"
 
-    # Reinstall dependencies if Vite is missing.
     if not vite_js.is_file():
-        print("3: Vite missing; installing project dependencies...")
+        if not npm:
+            raise RuntimeError("npm was not found in PATH.")
+
+        print("Vite is missing. Installing dependencies...")
 
         try:
-            install = subprocess.run(
+            result = subprocess.run(
                 [
                     npm,
                     "install",
@@ -73,49 +80,36 @@ def start_preview() -> str:
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
-                "Dependency installation exceeded 300 seconds."
+                "npm install timed out after 300 seconds."
             ) from exc
         except OSError as exc:
             raise RuntimeError(
                 f"Could not run npm install: {exc}"
             ) from exc
 
-        print("npm install exit code:", install.returncode)
-        print("npm stdout:", (install.stdout or "")[-3000:])
-        print("npm stderr:", (install.stderr or "")[-3000:])
+        print("npm exit code:", result.returncode)
+        print("npm output:", (result.stdout or "")[-3000:])
+        print("npm errors:", (result.stderr or "")[-3000:])
 
-        if install.returncode != 0:
+        if result.returncode != 0:
             raise RuntimeError(
-                "Dependency installation failed:\n"
-                f"{(install.stderr or install.stdout or '')[-5000:]}"
+                "npm install failed:\n"
+                + (result.stderr or result.stdout or "")[-5000:]
             )
 
     if not vite_js.is_file():
-        raise RuntimeError(
-            f"Vite entry point not found after installation: {vite_js}"
-        )
+        raise RuntimeError(f"Vite executable not found: {vite_js}")
 
-    # Reuse a running process only if it belongs to this project.
-    same_project = _current_project == project_dir
-
+    # Reuse the server only if the homepage AND JavaScript entry work.
     if _process is not None and _process.poll() is None:
-        if same_project and _is_ready():
-            print("4: Existing preview is ready.")
+        if _current_project == project_dir and _is_ready():
+            print("Existing Vite preview is healthy.")
             return PREVIEW_URL
 
-        print("4: Stopping previous preview process...")
-        _process.terminate()
-
-        try:
-            _process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _process.kill()
-            _process.wait()
+        print("Stopping unhealthy or outdated preview...")
+        _stop_process()
 
     log_path = project_dir / "vite-preview.log"
-
-    if _log_file is not None and not _log_file.closed:
-        _log_file.close()
 
     _log_file = open(log_path, "w", encoding="utf-8")
 
@@ -131,7 +125,7 @@ def start_preview() -> str:
         "/preview/",
     ]
 
-    print("5: Starting Vite:", command)
+    print("Starting Vite:", command)
 
     try:
         _process = subprocess.Popen(
@@ -142,48 +136,113 @@ def start_preview() -> str:
             shell=False,
         )
     except OSError as exc:
-        _log_file.close()
-        _log_file = None
-        raise RuntimeError(
-            f"Could not start Vite: {exc}"
-        ) from exc
+        _close_log()
+        raise RuntimeError(f"Could not start Vite: {exc}") from exc
 
     _current_project = project_dir
-    print("6: Vite PID:", _process.pid)
+    print("Vite PID:", _process.pid)
 
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 45
 
     while time.monotonic() < deadline:
         exit_code = _process.poll()
 
         if exit_code is not None:
+            logs = _read_preview_logs(project_dir)
+            _stop_process()
             raise RuntimeError(
-                f"Vite exited with code {exit_code}.\n"
-                + _read_preview_logs(project_dir)
+                f"Vite exited with code {exit_code}.\n{logs}"
             )
 
         if _is_ready():
-            print("7: Preview is ready:", PREVIEW_URL)
+            print("Vite preview is healthy:", PREVIEW_URL)
             return PREVIEW_URL
 
-        time.sleep(0.5)
+        time.sleep(1)
+
+    logs = _read_preview_logs(project_dir)
+    _stop_process()
 
     raise RuntimeError(
-        "Vite did not become ready within 30 seconds.\n"
-        + _read_preview_logs(project_dir)
+        "Vite did not serve the JavaScript entry correctly "
+        "within 45 seconds.\n" + logs
     )
 
 
 def _is_ready() -> bool:
+    """Verify that Vite serves HTML and JavaScript, not HTML for both."""
     try:
         with urllib.request.urlopen(
             PREVIEW_URL,
-            timeout=2,
+            timeout=3,
         ) as response:
-            return response.status == 200
+            if response.status != 200:
+                return False
 
-    except (OSError, urllib.error.URLError):
+            content_type = response.headers.get("Content-Type", "")
+            if "text/html" not in content_type.lower():
+                return False
+
+        entry_url = PREVIEW_URL + "src/main.jsx"
+
+        request = urllib.request.Request(
+            entry_url,
+            headers={"Accept": "text/javascript, */*"},
+        )
+
+        with urllib.request.urlopen(request, timeout=3) as response:
+            if response.status != 200:
+                return False
+
+            content_type = response.headers.get("Content-Type", "")
+            body = response.read(2000).decode(
+                "utf-8", errors="replace"
+            ).lstrip()
+
+            if "text/html" in content_type.lower():
+                print(
+                    "Preview check failed: main.jsx returned HTML. "
+                    f"Content-Type={content_type}, body={body[:200]!r}"
+                )
+                return False
+
+            if body.lower().startswith(
+                ("<!doctype html", "<html", "<head", "<body")
+            ):
+                print("Preview check failed: JavaScript URL returned HTML.")
+                return False
+
+            return True
+
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        print("Preview health check:", str(exc))
         return False
+
+
+def _stop_process() -> None:
+    global _process, _current_project
+
+    if _process is not None and _process.poll() is None:
+        _process.terminate()
+
+        try:
+            _process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _process.kill()
+            _process.wait()
+
+    _process = None
+    _current_project = None
+    _close_log()
+
+
+def _close_log() -> None:
+    global _log_file
+
+    if _log_file is not None:
+        if not _log_file.closed:
+            _log_file.close()
+        _log_file = None
 
 
 def _read_preview_logs(project_dir: Path) -> str:
@@ -197,7 +256,7 @@ def _read_preview_logs(project_dir: Path) -> str:
             encoding="utf-8",
             errors="replace",
         )
-        return f"Vite logs ({log_path}):\n{logs[-8000:]}"
+        return f"\nVite logs ({log_path}):\n{logs[-8000:]}"
 
     except OSError as exc:
-        return f"Could not read Vite logs: {exc}"
+        return f"\nCould not read Vite logs: {exc}"
