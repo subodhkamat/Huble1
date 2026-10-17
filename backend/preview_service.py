@@ -99,13 +99,21 @@ def start_preview() -> str:
             f"{(install.stderr or install.stdout or '')[-5000:]}"
         )
 
-    vite_path = project_dir / "node_modules" / "bin" / "vite.js"
+    vite_js = project_dir / "node_modules" / "vite" / "bin" / "vite.js"
+    vite_path = project_dir / "node_modules" / ".bin" / "vite"
 
-    if not vite_path.exists():
+    print("Vite JS entry exists:", vite_js.is_file())
+    print("Vite executable exists:", vite_path.exists())
+    print("Vite executable is symlink:", vite_path.is_symlink())
+
+    if not vite_js.is_file():
         raise RuntimeError(
-            "Vite is still missing after npm install. "
-            "Check package.json and the npm installation logs."
+            "Vite JavaScript entry point is missing after npm install.\n"
+            f"Project directory: {project_dir}\n"
+            f"package.json: {package_file.read_text(encoding='utf-8')}\n"
+            f"node_modules exists: {(project_dir / 'node_modules').is_dir()}"
         )
+
 
     print("6: Dependencies installed and Vite verified.")
 
