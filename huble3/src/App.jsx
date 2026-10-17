@@ -45,6 +45,30 @@ const [terminalStatus, setTerminalStatus] = useState({
 const [terminalBusy, setTerminalBusy] = useState(false);
 const [terminalError, setTerminalError] = useState("");
 
+async function downloadHtml() {
+  try {
+    const response = await fetch(`${API_URL}/download-html`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || "HTML download failed.");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "buildai-app.html";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "HTML download failed.");
+  }
+}
 
 //refreshing token
 async function refreshTerminalStatus() {
@@ -722,14 +746,10 @@ async function startLivePreview() {
                 >
                   Download selected file
                 </button>
+                 <button onClick={downloadHtml}   className="preview-button">
+                    Download HTML
+                  </button>
 
-                <button
-                  className="preview-button"
-                  onClick={downloadProject}
-                  disabled={Object.keys(files).length === 0}
-                >
-                  ↓ Download full project
-                </button>
 
                 <button
                   className="preview-button"

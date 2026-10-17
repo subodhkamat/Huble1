@@ -35,7 +35,7 @@ from terminal_service import (
     stop_dev_server,
 )
 import httpx
-
+from html_export import export_html
 
 
 load_dotenv(BASE_DIR / ".env", override=True)
@@ -397,3 +397,6 @@ async def terminal_stop():
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/download-html")
+async def download_html():
+    return export_html()
