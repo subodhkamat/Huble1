@@ -98,13 +98,10 @@ def start_preview() -> str:
             "Dependency installation failed:\n"
             f"{(install.stderr or install.stdout or '')[-5000:]}"
         )
-
+    
     vite_js = project_dir / "node_modules" / "vite" / "bin" / "vite.js"
-    vite_path = project_dir / "node_modules" / ".bin" / "vite"
 
     print("Vite JS entry exists:", vite_js.is_file())
-    print("Vite executable exists:", vite_path.exists())
-    print("Vite executable is symlink:", vite_path.is_symlink())
 
     if not vite_js.is_file():
         raise RuntimeError(
@@ -114,9 +111,7 @@ def start_preview() -> str:
             f"node_modules exists: {(project_dir / 'node_modules').is_dir()}"
         )
 
-
     print("6: Dependencies installed and Vite verified.")
-
 
     log_path = project_dir / "vite-preview.log"
     print("6a: Vite log file:", log_path)
@@ -127,15 +122,15 @@ def start_preview() -> str:
     _log_file = open(log_path, "w", encoding="utf-8")
 
     command = [
-    "node",
-    str(vite_path),
-    "--host",
-    PREVIEW_HOST,
-    "--port",
-    str(PREVIEW_PORT),
-    "--strictPort",
+        "node",
+        str(vite_js),
+        "--host",
+        PREVIEW_HOST,
+        "--port",
+        str(PREVIEW_PORT),
+        "--strictPort",
     ]
-          
+  
     print("7: Starting Vite...")
     print("7a: Command:", repr(command))
     print("7b: Working directory:", repr(str(project_dir)))
