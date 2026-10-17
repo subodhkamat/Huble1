@@ -37,6 +37,14 @@ from terminal_service import (
 import httpx
 from html_export import export_html
 
+BASE_DIR = Path(__file__).resolve().parent
+
+print("Backend directory:", BASE_DIR)
+print("Workspace exists:", (BASE_DIR.parent / "workspace").exists())
+print(
+    "Generated project exists:",
+    (BASE_DIR.parent / "workspace" / "generated_project").exists()
+)
 
 load_dotenv(BASE_DIR / ".env", override=True)
 
