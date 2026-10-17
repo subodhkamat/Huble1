@@ -48,17 +48,25 @@ print("ESBUILD PATH:", ESBUILD)
 print("ESBUILD EXISTS:", ESBUILD.exists())
 print("ESBUILD IS SYMLINK:", ESBUILD.is_symlink())
 
+print("ESBUILD MODE:", oct(ESBUILD.stat().st_mode))
+print("EXECUTABLE:", os.access(ESBUILD, os.X_OK))
+print("ESBUILD FILE:", ESBUILD.is_file())
+
 try:
     result = subprocess.run(
-        [str(ESBUILD), "--version"],
-        cwd=str(PROJECT_DIR),
-        capture_output=True,
-        text=True,
-        timeout=15,
-    )
+    ["npm", "install", "--include=dev"],
+    cwd=str(PROJECT_DIR),
+    capture_output=True,
+    text=True,
+    timeout=180,
+)
     print("ESBUILD RETURN CODE:", result.returncode)
     print("ESBUILD STDOUT:", result.stdout)
     print("ESBUILD STDERR:", result.stderr)
+
+
+    if result.returncode != 0:
+       raise RuntimeError(f"npm install failed: {result.stderr[-2000:]}")
 except Exception as error:
     print("ESBUILD EXECUTION ERROR:", repr(error))
 
