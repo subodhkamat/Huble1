@@ -99,7 +99,7 @@ def start_preview() -> str:
             f"{(install.stderr or install.stdout or '')[-5000:]}"
         )
 
-    vite_path = project_dir / "node_modules" / ".bin" / "vite"
+    vite_path = project_dir / "node_modules" / "bin" / "vite.js"
 
     if not vite_path.exists():
         raise RuntimeError(
@@ -119,15 +119,13 @@ def start_preview() -> str:
     _log_file = open(log_path, "w", encoding="utf-8")
 
     command = [
-        npm,
-        "run",
-        "dev",
-        "--",
-        "--host",
-        PREVIEW_HOST,
-        "--port",
-        str(PREVIEW_PORT),
-        "--strictPort",
+    "node",
+    str(vite_path),
+    "--host",
+    PREVIEW_HOST,
+    "--port",
+    str(PREVIEW_PORT),
+    "--strictPort",
     ]
           
     print("7: Starting Vite...")
