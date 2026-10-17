@@ -37,19 +37,36 @@ from terminal_service import (
 import httpx
 from html_export import export_html
 
-BASE_DIR = Path(__file__).resolve().parent
+from pathlib import Path
+import json
 
+BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent / "workspace" / "generated_project"
 
-print("Project directory:", PROJECT_DIR)
-print("Project files:")
+print("PROJECT_DIR:", PROJECT_DIR)
+print("PROJECT EXISTS:", PROJECT_DIR.exists())
 
-if PROJECT_DIR.exists():
-    for file in PROJECT_DIR.rglob("*"):
-        if file.is_file():
-            print(file.relative_to(PROJECT_DIR))
-else:
-    print("Generated project directory does not exist")
+for relative in [
+    "package.json",
+    "index.html",
+    "src/main.jsx",
+    "src/App.jsx",
+    "src/App.css",
+    "node_modules/esbuild/package.json",
+    "node_modules/.bin/esbuild",
+]:
+    path = PROJECT_DIR / relative
+    print(f"{relative}: {'EXISTS' if path.exists() else 'MISSING'}")
+
+package_file = PROJECT_DIR / "package.json"
+if package_file.exists():
+    package = json.loads(package_file.read_text(encoding="utf-8"))
+    print("PACKAGE SCRIPTS:", package.get("scripts", {}))
+    print(
+        "ESBUILD DEPENDENCY:",
+        package.get("dependencies", {}).get("esbuild")
+        or package.get("devDependencies", {}).get("esbuild")
+    )
 
 load_dotenv(BASE_DIR / ".env", override=True)
 
