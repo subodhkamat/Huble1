@@ -123,14 +123,16 @@ def start_preview() -> str:
     _log_file = open(log_path, "w", encoding="utf-8")
 
     command = [
-        "node",
-        str(vite_js),
-        "--host",
-        PREVIEW_HOST,
-        "--port",
-        str(PREVIEW_PORT),
-        "--strictPort",
-    ]
+    "node",
+    str(vite_js),
+    "--host",
+    PREVIEW_HOST,
+    "--port",
+    str(PREVIEW_PORT),
+    "--strictPort",
+    "--base",
+    "/preview/",
+]
   
     print("7: Starting Vite...")
     print("7a: Command:", repr(command))

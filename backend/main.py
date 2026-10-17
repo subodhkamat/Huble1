@@ -1,4 +1,5 @@
-
+from fastapi import Request
+from fastapi.responses import Response
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from preview_service import start_preview
@@ -33,6 +34,9 @@ from terminal_service import (
     start_dev_server,
     stop_dev_server,
 )
+import httpx
+
+
 
 load_dotenv(BASE_DIR / ".env", override=True)
 
@@ -121,6 +125,13 @@ async def generate(request: GenerateRequest):
         ) from exc
 
 
+@app.api_route(
+    "/preview",
+    methods=["GET", "HEAD"],
+)
+async def preview_home(request: Request):
+    return await preview_proxy("", request)
+
 @app.post("/preview")
 async def preview():
     try:
@@ -143,6 +154,61 @@ async def preview():
         raise HTTPException(
             status_code=500,
             detail="Could not start the project preview.",
+        ) from exc
+
+
+@app.api_route(
+    "/preview/{path:path}",
+    methods=["GET", "HEAD"],
+)
+async def preview_proxy(path: str, request: Request):
+    import httpx
+
+    from preview_service import PREVIEW_URL
+
+    target_url = f"{PREVIEW_URL}/{path}"
+
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=False,
+            timeout=30.0,
+        ) as client:
+            upstream = await client.request(
+                request.method,
+                target_url,
+                params=request.query_params,
+                headers={
+                    key: value
+                    for key, value in request.headers.items()
+                    if key.lower() in {"accept", "range", "if-none-match"}
+                },
+            )
+
+        excluded_headers = {
+            "content-encoding",
+            "content-length",
+            "transfer-encoding",
+            "connection",
+        }
+
+        headers = {
+            key: value
+            for key, value in upstream.headers.items()
+            if key.lower() not in excluded_headers
+        }
+
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            headers=headers,
+            media_type=upstream.headers.get("content-type"),
+        )
+
+    except httpx.HTTPError as exc:
+        print(f"Preview proxy failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to the running preview.",
         ) from exc
 
 
@@ -329,3 +395,5 @@ async def terminal_stop():
         return await asyncio.to_thread(stop_dev_server)
     except (OSError, RuntimeError) as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+

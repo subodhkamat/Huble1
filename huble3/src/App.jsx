@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 
-const API_URL = (import.meta.env.VITE_API_URL || "http://0.0.0.0:7651").replace(/\/$/, "");
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:7651"
+).replace(/\/$/, "");
 
 const examples = [
   "Build a student management dashboard",
@@ -80,8 +82,8 @@ async function runTerminalAction(action) {
     await refreshTerminalStatus();
 
     if (action === "start" && data.preview_url) {
-      setPreviewUrl(data.preview_url);
-    }
+  setPreviewUrl(`${API_URL}/preview`);
+}
 
     if (action === "stop") {
       setTerminalStatus((current) => ({
@@ -499,36 +501,40 @@ async function downloadProject() {
   }
 }
 
+
 async function startLivePreview() {
   setPreviewLoading(true);
   setPreviewError("");
 
   try {
-    const response = await fetch(
-      `${API_URL}/preview`,
-      {
-        method: "POST",
-      }
-    );
+    const response = await fetch(`${API_URL}/preview`, {
+      method: "POST",
+    });
 
-    const data = await response.json(); 
-    console.log(data)
+    const data = await response.json();
+
     if (!response.ok) {
       throw new Error(
         data.detail || "Could not start preview."
       );
     }
 
-    setPreviewUrl(data.preview_url);
-    console.log(previewUrl)
+    // Use the public FastAPI proxy URL, not data.preview_url.
+    const publicPreviewUrl = `${API_URL}/preview`;
+
+    setPreviewUrl(publicPreviewUrl);
+    console.log("Preview URL:", publicPreviewUrl);
   } catch (err) {
     setPreviewError(
-      err.message || "Preview failed."
+      err instanceof Error
+        ? err.message
+        : "Preview failed."
     );
   } finally {
     setPreviewLoading(false);
   }
 }
+
 
 
 
