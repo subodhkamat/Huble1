@@ -35,40 +35,32 @@ from terminal_service import (
     stop_dev_server,
 )
 import httpx
+import subprocess
 from html_export import export_html
 
-from pathlib import Path
-import json
-
 BASE_DIR = Path(__file__).resolve().parent
+
 PROJECT_DIR = BASE_DIR.parent / "workspace" / "generated_project"
 
-print("PROJECT_DIR:", PROJECT_DIR)
-print("PROJECT EXISTS:", PROJECT_DIR.exists())
+ESBUILD = PROJECT_DIR / "node_modules" / ".bin" / "esbuild"
 
-for relative in [
-    "package.json",
-    "index.html",
-    "src/main.jsx",
-    "src/App.jsx",
-    "src/App.css",
-    "node_modules/esbuild/package.json",
-    "node_modules/.bin/esbuild",
-]:
-    path = PROJECT_DIR / relative
-    print(f"{relative}: {'EXISTS' if path.exists() else 'MISSING'}")
+print("ESBUILD PATH:", ESBUILD)
+print("ESBUILD EXISTS:", ESBUILD.exists())
+print("ESBUILD IS SYMLINK:", ESBUILD.is_symlink())
 
-package_file = PROJECT_DIR / "package.json"
-if package_file.exists():
-    package = json.loads(package_file.read_text(encoding="utf-8"))
-    print("PACKAGE SCRIPTS:", package.get("scripts", {}))
-    print(
-        "ESBUILD DEPENDENCY:",
-        package.get("dependencies", {}).get("esbuild")
-        or package.get("devDependencies", {}).get("esbuild")
+try:
+    result = subprocess.run(
+        [str(ESBUILD), "--version"],
+        cwd=str(PROJECT_DIR),
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
-
-load_dotenv(BASE_DIR / ".env", override=True)
+    print("ESBUILD RETURN CODE:", result.returncode)
+    print("ESBUILD STDOUT:", result.stdout)
+    print("ESBUILD STDERR:", result.stderr)
+except Exception as error:
+    print("ESBUILD EXECUTION ERROR:", repr(error))
 
 oauth_state_secret = os.getenv("OAUTH_STATE_SECRET")
 
