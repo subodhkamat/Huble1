@@ -39,12 +39,17 @@ from html_export import export_html
 
 BASE_DIR = Path(__file__).resolve().parent
 
-print("Backend directory:", BASE_DIR)
-print("Workspace exists:", (BASE_DIR.parent / "workspace").exists())
-print(
-    "Generated project exists:",
-    (BASE_DIR.parent / "workspace" / "generated_project").exists()
-)
+PROJECT_DIR = BASE_DIR.parent / "workspace" / "generated_project"
+
+print("Project directory:", PROJECT_DIR)
+print("Project files:")
+
+if PROJECT_DIR.exists():
+    for file in PROJECT_DIR.rglob("*"):
+        if file.is_file():
+            print(file.relative_to(PROJECT_DIR))
+else:
+    print("Generated project directory does not exist")
 
 load_dotenv(BASE_DIR / ".env", override=True)
 
