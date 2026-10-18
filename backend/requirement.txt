@@ -16,3 +16,4 @@ typing-extensions
 playwright
 pwdlib
 PyJWT
+websockets>=12.0,<16.0

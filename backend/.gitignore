@@ -30,3 +30,4 @@ dist/
 
 # Generated project dependencies
 workspace/generated_project/node_modules/
+test2.py
