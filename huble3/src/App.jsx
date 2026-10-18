@@ -368,7 +368,7 @@ async function runAutoDebug() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        max_attempts: 3,
+        max_attempts: 5,
       }),
     });
 

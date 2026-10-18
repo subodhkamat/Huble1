@@ -183,36 +183,60 @@ def _is_ready() -> bool:
             if "text/html" not in content_type.lower():
                 return False
 
-        entry_url = PREVIEW_URL + "src/main.jsx"
+            entry_url = PREVIEW_URL + "src/main.jsx"
 
-        request = urllib.request.Request(
+            request = urllib.request.Request(
             entry_url,
             headers={"Accept": "text/javascript, */*"},
-        )
+            )
 
-        with urllib.request.urlopen(request, timeout=3) as response:
-            if response.status != 200:
-                return False
-
-            content_type = response.headers.get("Content-Type", "")
-            body = response.read(2000).decode(
+            with urllib.request.urlopen(request, timeout=5) as response:
+              content_type = response.headers.get("Content-Type", "")
+              body = response.read(4000).decode(
                 "utf-8", errors="replace"
             ).lstrip()
 
+              if response.status != 200:
+                return False
+
+              if "text/html" in content_type.lower():
+                print("Preview check failed: main.jsx returned HTML.")
+                return False
+
+              if body.lower().startswith(
+                ("<!doctype html", "<html", "<head", "<body")
+            ):
+                print("Preview check failed: main.jsx returned HTML.")
+                return False
+
+        # Also check App.jsx, which previously returned HTTP 500.
+        app_url = PREVIEW_URL + "src/App.jsx"
+
+        app_request = urllib.request.Request(
+            app_url,
+            headers={"Accept": "text/javascript, */*"},
+        )
+
+        with urllib.request.urlopen(app_request, timeout=5) as response:
+            content_type = response.headers.get("Content-Type", "")
+            body = response.read(4000).decode(
+                "utf-8", errors="replace"
+            ).lstrip()
+
+            if response.status != 200:
+                return False
+
             if "text/html" in content_type.lower():
-                print(
-                    "Preview check failed: main.jsx returned HTML. "
-                    f"Content-Type={content_type}, body={body[:200]!r}"
-                )
+                print("Preview check failed: App.jsx returned HTML.")
                 return False
 
             if body.lower().startswith(
                 ("<!doctype html", "<html", "<head", "<body")
             ):
-                print("Preview check failed: JavaScript URL returned HTML.")
+                print("Preview check failed: App.jsx returned HTML.")
                 return False
 
-            return True
+        return True
 
     except (OSError, urllib.error.URLError, TimeoutError) as exc:
         print("Preview health check:", str(exc))
