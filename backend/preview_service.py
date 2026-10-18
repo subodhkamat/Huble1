@@ -11,102 +11,13 @@ from runtime_service import install_runtime_bridge
 from project_service import BASE_DIR
 
 
-PREVIEW_HOST = "127.0.0.1"
+PREVIEW_HOST = "0.0.0.0"
 PREVIEW_PORT = 5173
 PREVIEW_URL = f"http://127.0.0.1:{PREVIEW_PORT}/preview/"
 
 _process = None
 _log_file = None
 _current_project = None
-
-
-def repair_linux_rollup_dependency(
-    project_dir: Path,
-    npm: str | None = None,
-) -> None:
-    """Repair missing Rollup Linux native dependencies on Render."""
-    if not sys.platform.startswith("linux"):
-        return
-
-    node_modules = project_dir / "node_modules"
-    rollup_loader = node_modules / "rollup" / "dist" / "native.js"
-    native_dir = node_modules / "@rollup" / "rollup-linux-x64-gnu"
-
-    # Rollup is not installed yet; the normal npm install below handles it.
-    if not rollup_loader.is_file():
-        return
-
-    # The package must contain both its manifest and native binary.
-    native_package_json = native_dir / "package.json"
-    native_binary = native_dir / "rollup.linux-x64-gnu.node"
-
-    if native_package_json.is_file() and native_binary.is_file():
-        print("Linux Rollup native dependency is present.")
-        return
-
-    npm = npm or shutil.which("npm")
-    if not npm:
-        raise RuntimeError(
-            "npm is required to repair the missing Linux Rollup dependency."
-        )
-
-    print("Missing Linux Rollup native dependency detected.")
-    print("Reinstalling generated-project dependencies...")
-
-    # Remove platform-specific installed files and the potentially
-    # incomplete lockfile so npm can resolve optional dependencies again.
-    shutil.rmtree(node_modules, ignore_errors=True)
-
-    lockfile = project_dir / "package-lock.json"
-    if lockfile.exists():
-        lockfile.unlink()
-
-    try:
-        result = subprocess.run(
-            [
-                npm,
-                "install",
-                "--include=dev",
-                "--no-audit",
-                "--no-fund",
-            ],
-            cwd=str(project_dir),
-            capture_output=True,
-            text=True,
-            timeout=300,
-            shell=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            "npm install timed out while repairing Rollup after 300 seconds."
-        ) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"Could not reinstall generated-project dependencies: {exc}"
-        ) from exc
-
-    print("npm repair exit code:", result.returncode)
-    if result.stdout:
-        print("npm output:", result.stdout[-4000:])
-    if result.stderr:
-        print("npm errors:", result.stderr[-4000:])
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            "Dependency repair failed:\n"
-            + (result.stderr or result.stdout or "")[-5000:]
-        )
-
-    if not (
-        native_package_json.is_file()
-        and native_binary.is_file()
-    ):
-        raise RuntimeError(
-            "npm install completed, but Rollup's Linux native binary "
-            "is still missing."
-        )
-
-    print("Linux Rollup dependency repaired successfully.")
 
 
 
@@ -121,9 +32,7 @@ def start_preview() -> str:
     package_file = project_dir / "package.json"
     index_file = project_dir / "index.html"
     main_file = project_dir / "src" / "main.jsx"
-    
-    print("Preview project:", project_dir)
-    
+
     print("Preview project:", project_dir)
     print("package.json:", package_file.is_file())
     print("index.html:", index_file.is_file())
@@ -149,9 +58,6 @@ def start_preview() -> str:
     if not node:
         raise RuntimeError("Node.js was not found in PATH.")
 
-    # Repair an incomplete Linux Rollup installation before launching Vite.
-    repair_linux_rollup_dependency(project_dir, npm)
-
     vite_js = project_dir / "node_modules" / "vite" / "bin" / "vite.js"
 
     if not vite_js.is_file():
@@ -159,43 +65,6 @@ def start_preview() -> str:
             raise RuntimeError("npm was not found in PATH.")
 
         print("Vite is missing. Installing dependencies...")
-
-        try:
-            result = subprocess.run(
-                [
-                    npm,
-                    "install",
-                    "--include=dev",
-                    "--no-audit",
-                    "--no-fund",
-                ],
-                cwd=str(project_dir),
-                capture_output=True,
-                text=True,
-                timeout=300,
-                shell=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                "npm install timed out after 300 seconds."
-            ) from exc
-        except OSError as exc:
-            raise RuntimeError(
-                f"Could not run npm install: {exc}"
-            ) from exc
-
-        print("npm exit code:", result.returncode)
-        print("npm output:", (result.stdout or "")[-3000:])
-        print("npm errors:", (result.stderr or "")[-3000:])
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                "npm install failed:\n"
-                + (result.stderr or result.stdout or "")[-5000:]
-            )
-
-    if not vite_js.is_file():
-        raise RuntimeError(f"Vite executable not found: {vite_js}")
 
         try:
             result = subprocess.run(
@@ -302,11 +171,13 @@ def start_preview() -> str:
     )
 
 
-
 def _is_ready() -> bool:
-    """Check that Vite serves HTML and transformed JavaScript correctly."""
+    """Verify that Vite serves HTML and JavaScript, not HTML for both."""
     try:
-        with urllib.request.urlopen(PREVIEW_URL, timeout=3) as response:
+        with urllib.request.urlopen(
+            PREVIEW_URL,
+            timeout=3,
+        ) as response:
             if response.status != 200:
                 return False
 
@@ -314,46 +185,64 @@ def _is_ready() -> bool:
             if "text/html" not in content_type.lower():
                 return False
 
-        for relative_path in ("src/main.jsx", "src/App.jsx"):
-            url = PREVIEW_URL + relative_path
+            entry_url = PREVIEW_URL + "src/main.jsx"
+
             request = urllib.request.Request(
-                url,
-                headers={"Accept": "text/javascript, */*"},
+            entry_url,
+            headers={"Accept": "text/javascript, */*"},
             )
 
             with urllib.request.urlopen(request, timeout=5) as response:
-                if response.status != 200:
-                    return False
+              content_type = response.headers.get("Content-Type", "")
+              body = response.read(4000).decode(
+                "utf-8", errors="replace"
+            ).lstrip()
 
-                content_type = response.headers.get("Content-Type", "")
-                body = response.read(4000).decode(
-                    "utf-8", errors="replace"
-                ).lstrip()
+              if response.status != 200:
+                return False
 
-                if "text/html" in content_type.lower():
-                    print(
-                        f"Preview check failed: {relative_path} returned HTML."
-                    )
-                    return False
+              if "text/html" in content_type.lower():
+                print("Preview check failed: main.jsx returned HTML.")
+                return False
 
-                if body.lower().startswith(
-                    ("<!doctype html", "<html", "<head", "<body")
-                ):
-                    print(
-                        f"Preview check failed: {relative_path} returned HTML."
-                    )
-                    return False
+              if body.lower().startswith(
+                ("<!doctype html", "<html", "<head", "<body")
+            ):
+                print("Preview check failed: main.jsx returned HTML.")
+                return False
+
+        # Also check App.jsx, which previously returned HTTP 500.
+        app_url = PREVIEW_URL + "src/App.jsx"
+
+        app_request = urllib.request.Request(
+            app_url,
+            headers={"Accept": "text/javascript, */*"},
+        )
+
+        with urllib.request.urlopen(app_request, timeout=5) as response:
+            content_type = response.headers.get("Content-Type", "")
+            body = response.read(4000).decode(
+                "utf-8", errors="replace"
+            ).lstrip()
+
+            if response.status != 200:
+                return False
+
+            if "text/html" in content_type.lower():
+                print("Preview check failed: App.jsx returned HTML.")
+                return False
+
+            if body.lower().startswith(
+                ("<!doctype html", "<html", "<head", "<body")
+            ):
+                print("Preview check failed: App.jsx returned HTML.")
+                return False
 
         return True
 
-    except (
-        OSError,
-        urllib.error.URLError,
-        TimeoutError,
-    ) as exc:
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
         print("Preview health check:", str(exc))
         return False
-
 
 
 def _stop_process() -> None:

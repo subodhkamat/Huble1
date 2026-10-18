@@ -1,54 +1,94 @@
-import asyncio
-import os
-from pathlib import Path
-
-import httpx
-import websockets
-from dotenv import load_dotenv
-
-# Load environment variables before importing modules that read them.
-load_dotenv()
-
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Request
+from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
-from starlette.background import BackgroundTask
-from starlette.middleware.sessions import SessionMiddleware
-
-from debug_service import auto_debug_project
-from edit_service import edit_project
-from html_export import export_html
-from model_config import generate_project1
-from oauth_service import router as oauth_router
 from preview_service import start_preview
+from schemas import GenerateRequest, GenerateResponse
+from ai_service import generate_project
+from project_service import save_project
+import os
+from dotenv import load_dotenv
+load_dotenv()
+from pathlib import Path
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from project_service import create_project_zip
+from schemas import EditRequest
+from edit_service import edit_project
+from project_service import apply_project_changes
+from schemas import AutoDebugRequest
+from debug_service import auto_debug_project
+from schemas import RuntimeErrorReport
+from test_service import run_autonomous_tests
+from schemas import TestProjectRequest
+from schemas import ProjectPlanRequest
+from starlette.middleware.sessions import SessionMiddleware
+from model_config import generate_project1
+from database import BASE_DIR
+from oauth_service import router as oauth_router
 from project_planner import analyze_project, plan_project_change
-from project_service import apply_project_changes, create_project_zip, save_project
-from schemas import (
-    AutoDebugRequest,
-    EditRequest,
-    GenerateRequest,
-    GenerateResponse,
-    ProjectPlanRequest,
-    RuntimeErrorReport,
-    TestProjectRequest,
-)
 from terminal_service import (
     get_terminal_status,
     install_dependencies,
     start_dev_server,
     stop_dev_server,
 )
-from test_service import run_autonomous_tests
+import httpx
+import subprocess
+from html_export import export_html
+import asyncio
+import websockets
 
-# Keep paths explicit for the deployed backend layout.
-BACKEND_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = BACKEND_DIR.parent / "workspace" / "generated_project"
+from fastapi import WebSocket, WebSocketDisconnect
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+PROJECT_DIR = BASE_DIR.parent / "workspace" / "generated_project"
+
+ESBUILD = PROJECT_DIR / "node_modules" / ".bin" / "esbuild"
+
+print("ESBUILD PATH:", ESBUILD)
+print("ESBUILD EXISTS:", ESBUILD.exists())
+print("ESBUILD IS SYMLINK:", ESBUILD.is_symlink())
+
+print("ESBUILD MODE:", oct(ESBUILD.stat().st_mode))
+print("EXECUTABLE:", os.access(ESBUILD, os.X_OK))
+print("ESBUILD FILE:", ESBUILD.is_file())
+
+try:
+    result = subprocess.run(
+    ["npm", "install", "--include=dev"],
+    cwd=str(PROJECT_DIR),
+    capture_output=True,
+    text=True,
+    timeout=180,
+)
+    print("ESBUILD RETURN CODE:", result.returncode)
+    print("ESBUILD STDOUT:", result.stdout)
+    print("ESBUILD STDERR:", result.stderr)
+
+
+    if result.returncode != 0:
+       raise RuntimeError(f"npm install failed: {result.stderr[-2000:]}")
+except Exception as error:
+    print("ESBUILD EXECUTION ERROR:", repr(error))
 
 oauth_state_secret = os.getenv("OAUTH_STATE_SECRET")
-if not oauth_state_secret:
-    raise RuntimeError("OAUTH_STATE_SECRET is missing from the environment")
 
-cookie_secure = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+from config import FRONTEND_URL as frontend_url
+
+if not oauth_state_secret:
+    raise RuntimeError(
+        "OAUTH_STATE_SECRET is missing from backend/.env"
+    )
+
+cookie_secure = (
+    os.getenv("COOKIE_SECURE", "false").lower() == "true"
+)
+
+import asyncio
 
 app = FastAPI(
     title="AI App Builder",
@@ -391,95 +431,3 @@ async def terminal_stop():
 async def download_html():
     return export_html()
 
-
-@app.websocket("/preview")
-@app.websocket("/preview/")
-async def preview_websocket(websocket: WebSocket):
-    """Forward Vite's HMR WebSocket through the public /preview/ route.
-
-    The external /preview/ prefix is stripped by this proxy, so the internal
-    Vite connection normally uses /. Keep the query string because Vite may
-    include its WebSocket token there.
-    """
-    from preview_service import PREVIEW_PORT
-
-    query = websocket.url.query
-    target_url = f"ws://127.0.0.1:{PREVIEW_PORT}/"
-    if query:
-        target_url = f"{target_url}?{query}"
-
-    try:
-        # Connect upstream before accepting the browser handshake. If Vite is
-        # unavailable, the log will show the upstream failure rather than
-        # accepting a WebSocket that cannot be proxied.
-        async with websockets.connect(
-            target_url,
-            open_timeout=10,
-            ping_interval=20,
-            close_timeout=5,
-            max_size=8 * 1024 * 1024,
-        ) as upstream:
-            await websocket.accept()
-
-            async def browser_to_vite():
-                while True:
-                    message = await websocket.receive()
-                    if message["type"] == "websocket.disconnect":
-                        return
-                    if message.get("text") is not None:
-                        await upstream.send(message["text"])
-                    elif message.get("bytes") is not None:
-                        await upstream.send(message["bytes"])
-
-            async def vite_to_browser():
-                while True:
-                    message = await upstream.recv()
-                    if isinstance(message, bytes):
-                        await websocket.send_bytes(message)
-                    else:
-                        await websocket.send_text(message)
-
-            tasks = {
-                asyncio.create_task(browser_to_vite(), name="browser-to-vite"),
-                asyncio.create_task(vite_to_browser(), name="vite-to-browser"),
-            }
-
-            try:
-                done, pending = await asyncio.wait(
-                    tasks,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                for task in done:
-                    if not task.cancelled():
-                        error = task.exception()
-                        if error is not None and not isinstance(
-                            error, WebSocketDisconnect
-                        ):
-                            print(f"Preview WebSocket forwarding error: {error!r}")
-
-                for task in pending:
-                    task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-            finally:
-                for task in tasks:
-                    if not task.done():
-                        task.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
-
-    except WebSocketDisconnect:
-        pass
-    except Exception as exc:
-        print(
-            "Preview WebSocket proxy failed "
-            f"(upstream={target_url!r}): {type(exc).__name__}: {exc}"
-        )
-        # If the browser handshake has not been accepted, Starlette will reject
-        # it. Otherwise close with a server-error code.
-        try:
-            if websocket.application_state.name == "CONNECTED":
-                await websocket.close(code=1011, reason="Preview WebSocket failed")
-            else:
-                await websocket.close()
-        except Exception:
-            pass
