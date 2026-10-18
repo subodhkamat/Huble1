@@ -2,7 +2,7 @@
 from pathlib import Path
 import os
 import zipfile
-
+import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -136,65 +136,110 @@ def create_project_zip() -> Path:
         raise
 
 #editing project
+
 def apply_project_changes(changes: dict[str, str]) -> list[str]:
     """
-    Write validated edits inside the generated project only.
-    Existing files are backed up in memory so a write failure
-    can roll back the files already changed.
+    Safely apply AI-generated file changes inside the generated project.
+
+    Validates all paths and contents before writing. Uses temporary files
+    for atomic replacement and attempts to restore original files if a
+    write operation fails.
     """
+    if not isinstance(changes, dict):
+        raise ValueError("Changes must be a dictionary.")
+
+    if not changes:
+        return []
+
     root = BASE_DIR.resolve()
     root.mkdir(parents=True, exist_ok=True)
 
+    max_file_size = 80_000
+
+    blocked_directories = {
+        "node_modules",
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "dist",
+        "build",
+    }
+
+    blocked_lockfiles = {
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+    }
+
     targets = {}
 
+    # Validate EVERY proposed change before writing any files.
     for relative_path, content in changes.items():
-        if not isinstance(relative_path, str):
-            raise ValueError("Invalid path.")
+        if not isinstance(relative_path, str) or not relative_path:
+            raise ValueError("Invalid file path.")
 
         if not isinstance(content, str):
-            raise ValueError("Invalid file content.")
+            raise ValueError(
+                f"Invalid file content: {relative_path}"
+            )
 
         normalized = relative_path.replace("\\", "/")
         parts = normalized.split("/")
 
         if (
-            not normalized
-            or normalized.startswith("/")
+            normalized.startswith("/")
+            or re.match(r"^[a-zA-Z]:", normalized)
             or any(part in {"", ".", ".."} for part in parts)
             or any(part.startswith(".") for part in parts)
             or any(
-                part in {
-                    "node_modules", ".git", ".venv", "venv",
-                    "__pycache__", "dist", "build",
-                }
+                part.lower() in blocked_directories
                 for part in parts
             )
-            or parts[-1] in {
-                "package-lock.json", "pnpm-lock.yaml", "yarn.lock"
-            }
-            or parts[-1].startswith(".env")
+            or parts[-1].lower() in blocked_lockfiles
+            or parts[-1].lower().startswith(".env")
         ):
-            raise ValueError(f"Unsafe path: {relative_path}")
+            raise ValueError(f"Unsafe file path: {relative_path}")
 
-        target = (root / normalized).resolve()
+        if len(content.encode("utf-8")) > max_file_size:
+            raise ValueError(
+                f"File exceeds the size limit: {relative_path}"
+            )
+
+        # Inspect the original path components BEFORE resolving.
+        candidate = root / normalized
+        current = root
+
+        for part in parts:
+            current = current / part
+
+            if current.is_symlink():
+                raise ValueError(
+                    f"Symbolic links are not allowed: {relative_path}"
+                )
+
+        target = candidate.resolve()
 
         if not target.is_relative_to(root):
-            raise ValueError("Path escapes project directory.")
+            raise ValueError(
+                f"Path escapes project directory: {relative_path}"
+            )
 
         if target.exists() and not target.is_file():
-            raise ValueError("Target is not a regular file.")
+            raise ValueError(
+                f"Target is not a regular file: {relative_path}"
+            )
 
-        if target.is_symlink():
-            raise ValueError("Symbolic links are not allowed.")
-
-        if len(content.encode("utf-8")) > 80_000:
-            raise ValueError("File exceeds the size limit.")
+        # Avoid two different input paths targeting the same file.
+        if target in (entry[0] for entry in targets.values()):
+            raise ValueError(
+                f"Duplicate target path: {relative_path}"
+            )
 
         targets[normalized] = (target, content)
 
-    # Capture original contents before writing anything.
+    # Back up original contents before writing.
     originals = {}
-    created = []
 
     for relative, (target, _) in targets.items():
         if target.exists():
@@ -202,17 +247,40 @@ def apply_project_changes(changes: dict[str, str]) -> list[str]:
         else:
             originals[relative] = None
 
+    created = []
+    touched = []
+
     try:
         for relative, (target, content) in targets.items():
-            target.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
+            target.parent.mkdir(parents=True, exist_ok=True)
 
-            # Atomic replacement avoids partially written files.
+            # Recheck the destination immediately before writing.
+            # This also detects a symlink introduced after validation.
+            current = root
+
+            for part in relative.split("/"):
+                current = current / part
+
+                if current.is_symlink():
+                    raise ValueError(
+                        f"Symbolic link detected before writing: {relative}"
+                    )
+
+            if not target.is_relative_to(root):
+                raise ValueError(
+                    f"Path escapes project directory: {relative}"
+                )
+
+            if target.exists() and not target.is_file():
+                raise ValueError(
+                    f"Target is not a regular file: {relative}"
+                )
+
             temporary = target.with_name(
                 target.name + ".edit-tmp"
             )
+
+            touched.append(relative)
 
             try:
                 temporary.write_text(
@@ -220,14 +288,18 @@ def apply_project_changes(changes: dict[str, str]) -> list[str]:
                     encoding="utf-8",
                 )
                 temporary.replace(target)
+
+                if originals[relative] is None:
+                    created.append(relative)
+
             finally:
                 temporary.unlink(missing_ok=True)
 
-            created.append(relative)
+    except Exception as original_error:
+        rollback_errors = []
 
-    except Exception:
-        # Best-effort rollback if a write fails.
-        for relative in reversed(created):
+        # Restore files in reverse order.
+        for relative in reversed(touched):
             target, _ = targets[relative]
             original = originals[relative]
 
@@ -235,9 +307,28 @@ def apply_project_changes(changes: dict[str, str]) -> list[str]:
                 if original is None:
                     target.unlink(missing_ok=True)
                 else:
-                    target.write_bytes(original)
-            except OSError:
-                pass
+                    # Restore using a temporary file and atomic replace.
+                    restore_temp = target.with_name(
+                        target.name + ".rollback-tmp"
+                    )
+
+                    try:
+                        restore_temp.write_bytes(original)
+                        restore_temp.replace(target)
+                    finally:
+                        restore_temp.unlink(missing_ok=True)
+
+            except OSError as rollback_error:
+                rollback_errors.append(
+                    f"{relative}: {rollback_error}"
+                )
+
+        if rollback_errors:
+            raise RuntimeError(
+                "File update failed and rollback was incomplete. "
+                f"Original error: {original_error}. "
+                f"Rollback errors: {'; '.join(rollback_errors)}"
+            ) from original_error
 
         raise
 

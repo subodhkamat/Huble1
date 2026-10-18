@@ -17,9 +17,21 @@ load_dotenv()
 providers = []
 
 groq_key = os.getenv("GROQ_API_KEY")
+groq_key1=os.getenv("GROQ_API_KEY1")
 if groq_key:
     providers.append({
         "name": "Groq",
+        "client": AsyncOpenAI(
+            api_key=groq_key,
+            base_url="https://api.groq.com/openai/v1",
+        ),
+        "model": os.getenv("AI_MODEL", "openai/gpt-oss-20b"),
+        "json_mode": True,
+    })
+
+if groq_key1:
+    providers.append({
+        "name": "Groq1",
         "client": AsyncOpenAI(
             api_key=groq_key,
             base_url="https://api.groq.com/openai/v1",

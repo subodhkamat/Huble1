@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-import sys
+
 from runtime_service import install_runtime_bridge
 from project_service import BASE_DIR
 
@@ -18,8 +18,6 @@ PREVIEW_URL = f"http://127.0.0.1:{PREVIEW_PORT}/preview/"
 _process = None
 _log_file = None
 _current_project = None
-
-
 
 
 def start_preview() -> str:
