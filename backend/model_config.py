@@ -33,7 +33,7 @@ if groq_key1:
     providers.append({
         "name": "Groq",
         "client": AsyncOpenAI(
-            api_key=groq_key,
+            api_key=groq_key1,
             base_url="https://api.groq.com/openai/v1",
         ),
         "model": os.getenv("AI_MODEL", "openai/gpt-oss-20b"),
@@ -231,6 +231,25 @@ Return ONLY valid JSON with this structure:
     "src/App.css": "complete file contents"
   }
 }
+
+
+9. STRICT JSON VALIDITY AND SOURCE CODE HANDLING
+
+- Return exactly one valid JSON object with a top-level "files" object.
+- Every file path must map to a complete source-code string.
+- Properly escape all double quotes, backslashes, and control characters inside JSON strings.
+- Represent line breaks inside JSON strings using valid JSON escaping.
+- Ensure CSS braces, JSX tags, JavaScript syntax, and string literals remain intact.
+- Do not add trailing commas or comments outside JSON strings.
+- Do not wrap the response in Markdown code fences.
+- Do not include explanations before or after the JSON object.
+- Never truncate a file or return an incomplete JSON object.
+- Check that the final response is valid JSON before returning it.
+- If the complete output cannot fit within the available output limit,
+  return a smaller set of complete modified files rather than truncating a file.
+- Do not modify files that do not need changes.
+
+
 Include every modified file, using its actual relative path.
 Include src/main.jsx, index.html, or package.json only when
 they genuinely need changes.
@@ -418,59 +437,123 @@ Do not omit required files.
     return {"result": project}
 
 # -------------------- TOOL 2: UI MODERNIZER --------------------
-async def ui_modernizer(state: State) -> dict:
 
+async def ui_modernizer(state: State) -> dict:
     prompt = state.get("prompt", "")
-    print(f"{prompt}")
     existing_files = state.get("files", {})
-    print("1c")
+
     if not isinstance(existing_files, dict) or not existing_files:
         raise ValueError(
             "No existing project files provided to the UI modernizer."
         )
-    user_message = f"""
-    
-User's design requirements:
 
+    user_message = f"""
+User's design requirements:
 {prompt}
 
 Existing project files:
-
 {json.dumps(existing_files, ensure_ascii=False)}
+
 Modernize the existing project according to the system instructions.
 Preserve existing functionality and return only files that need changes.
 Return a JSON object with a top-level "files" object.
 Each file value must be a complete replacement source-code string.
-Do not return Markdown fences.
-
+Do not return Markdown fences or explanations.
 """
-    response, provider_name = await create_completion_with_fallback(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT2},
-            {"role": "user", "content": user_message},
-        ],
-        max_tokens=20000,
-        temperature=0.2,
-    )
-    print("2c")
-    result = parse_model_json(
-        response.choices[0].message.content,
-        response,
-        "UI modernizer",
-    )
-    print("3c")
-    modified_files = result.get("files")
-    if not isinstance(modified_files, dict) or not modified_files:
-        raise ValueError(
-            "UI modernizer must return a non-empty 'files' object."
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT2},
+        {"role": "user", "content": user_message},
+    ]
+
+    # Try normal generation, then one JSON repair attempt.
+    for attempt in range(2):
+        response, provider_name = await create_completion_with_fallback(
+            messages,
+            max_tokens=20000,
+            temperature=0.1 if attempt == 0 else 0,
         )
-    validate_files(modified_files)
-    return {
-        "result": {
-            "files": modified_files,
-            "modified_paths": list(modified_files.keys()),
+
+        content = response.choices[0].message.content
+
+        try:
+            result = parse_model_json(
+                content,
+                response,
+                "UI modernizer",
+            )
+        except ValueError as exc:
+            if attempt == 1:
+                raise ValueError(
+                    "UI modernizer failed after a JSON repair attempt. "
+                    f"Last error: {exc}"
+                ) from exc
+
+            print(
+                "UI modernizer returned invalid JSON. "
+                "Retrying with a repair prompt."
+            )
+
+            # Keep the original project files intact.
+            messages = [
+                {
+                    "role": "system",
+                    "content": """
+You are a JSON repair specialist.
+Return exactly one valid JSON object with a top-level "files" object.
+Each files value must be a complete source-code string.
+Correct JSON escaping, quotes, backslashes, and newlines.
+Preserve all CSS, JSX, JavaScript, and HTML code.
+Do not return Markdown fences or explanations.
+Do not truncate the response.
+""",
+                },
+                {
+                    "role": "user",
+                    "content": f"""
+The UI modernizer returned invalid JSON.
+
+Original design requirements:
+{prompt}
+
+Expected structure:
+{{
+  "files": {{
+    "src/App.jsx": "complete source code",
+    "src/App.css": "complete source code"
+  }}
+}}
+
+Original project files:
+{json.dumps(existing_files, ensure_ascii=False)}
+
+Invalid AI response:
+{content or "[Empty response]"}
+
+Repair the JSON and return the complete valid JSON object.
+Preserve the intended UI changes and existing functionality.
+""",
+                },
+            ]
+            continue
+
+        modified_files = result.get("files")
+
+        if not isinstance(modified_files, dict) or not modified_files:
+            raise ValueError(
+                "UI modernizer must return a non-empty 'files' object."
+            )
+
+        validate_files(modified_files)
+
+        return {
+            "result": {
+                "files": modified_files,
+                "modified_paths": list(modified_files.keys()),
+            }
         }
-    }
+
+    raise ValueError("UI modernizer could not produce valid JSON.")
 
 # -------------------- MERGE MODERNIZED FILES --------------------
 async def run_ui_modernizer(state: State) -> dict:
