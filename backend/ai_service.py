@@ -139,7 +139,6 @@ client = FallbackClient()
 MODEL = os.getenv("AI_MODEL", "openai/gpt-oss-20b")
 
 
-
 SYSTEM_PROMPT = """
 You are a senior full-stack software engineer
 inside an AI application builder.
