@@ -168,6 +168,13 @@ DEPENDENCIES (critical)
 - If you can avoid a library (e.g. use emoji or inline SVG for icons),
   do so.
 
+ Keep dependencies minimal. Use only react and react-dom
+    (plus vite and @vitejs/plugin-react as dev dependencies).
+    Do not import icon libraries or any other package. Use emoji
+    or inline SVG for icons. Every import must be listed in
+    package.json
+
+    
 QUALITY
 - Every button and input must do something real.
 - Handle empty input, invalid input and errors with visible,
